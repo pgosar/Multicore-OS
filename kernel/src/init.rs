@@ -10,11 +10,15 @@ use limine::{
 };
 
 use crate::{
+    constants::processes::SYSCALL_BINARY,
     debug, devices,
     events::{register_event_runner, run_loop},
     interrupts::{self, idt},
     logging,
     memory::{self},
+    processes::process::{self, create_process, PROCESS_TABLE},
+    serial_println,
+    syscalls::mmap::{sys_mmap, MmapFlags, ProtFlags},
     trace,
 };
 
@@ -55,7 +59,21 @@ pub fn init() -> u32 {
 
     register_event_runner(bsp_id);
     idt::enable();
-
+    let pid = create_process(SYSCALL_BINARY);
+    let addr = sys_mmap(
+        0x1000,
+        0x5000,
+        ProtFlags::PROT_WRITE | ProtFlags::PROT_READ,
+        MmapFlags::MAP_ANONYMOUS,
+        -1,
+        0,
+    );
+    let process_table = PROCESS_TABLE.read();
+    let process = process_table.get(&pid).expect("can't find pcb in process table");
+    let pcb = process.pcb.get();
+    unsafe {
+    serial_println!("{:?}", *pcb);
+    }
     bsp_id
 }
 

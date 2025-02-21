@@ -11,16 +11,23 @@ use x86_64::{
     instructions::interrupts,
     structures::{
         idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
-        paging::{OffsetPageTable, Page, PageTable},
+        paging::{OffsetPageTable, Page, PageTable, PageTableFlags},
     },
     VirtAddr,
 };
 
 use crate::{
-    constants::idt::{SYSCALL_HANDLER, TIMER_VECTOR, TLB_SHOOTDOWN_VECTOR},
+    constants::{
+        idt::{SYSCALL_HANDLER, TIMER_VECTOR, TLB_SHOOTDOWN_VECTOR},
+        memory::PAGE_SIZE,
+    },
     events::{current_running_event_info, schedule_process, EventInfo},
     interrupts::x2apic::{self, current_core_id, TLB_SHOOTDOWN_ADDR},
-    memory::{paging::create_mapping, HHDM_OFFSET},
+    memory::{
+        frame_allocator::alloc_frame,
+        paging::{create_mapping, update_mapping},
+        HHDM_OFFSET, MAPPER,
+    },
     prelude::*,
     processes::process::{run_process_ring3, ProcessState, PROCESS_TABLE},
 };
@@ -150,6 +157,30 @@ extern "x86-interrupt" fn page_fault_handler(
     // check for stack growth
     if stack_pointer - 64 <= faulting_address && faulting_address < (*HHDM_OFFSET).as_u64() {
         create_mapping(page, &mut mapper, None);
+        return;
+    }
+
+    // check if lazy loaded address from mmap
+    let cpuid: u32 = x2apic::current_core_id() as u32;
+    let event: EventInfo = current_running_event_info(cpuid);
+    let pid = event.pid;
+    let process_table = PROCESS_TABLE.write();
+    let process = process_table
+        .get(&pid)
+        .expect("Could not get pcb from process table");
+    let pcb = unsafe { &mut *process.pcb.get() };
+    let mmaps = &mut (*pcb).mmaps;
+
+    for entry in mmaps.iter_mut() {
+        if entry.contains(faulting_address) {
+            let index = faulting_address - entry.start / PAGE_SIZE as u64;
+            if !entry.loaded[index as usize] {
+                entry.loaded[index as usize] = true;
+                let mut mapper = MAPPER.lock();
+                let frame = alloc_frame().expect("Could not allocate frame");
+                update_mapping(page, &mut *mapper, frame, Some(PageTableFlags::PRESENT));
+            }
+        }
     }
 
     panic!("PAGE FAULT!");
