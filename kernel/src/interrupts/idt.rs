@@ -202,13 +202,32 @@ extern "x86-interrupt" fn page_fault_handler(
 }
 
 #[no_mangle]
+#[naked]
 extern "x86-interrupt" fn syscall_handler(_: InterruptStackFrame) {
     unsafe {
-        // I believe we need to save registers
-        core::arch::asm!("push rax", "call dispatch_syscall", "pop rax",);
+        core::arch::naked_asm!(
+            // Save all registers that might be clobbered
+            "push rax",
+            "push rcx",
+            "push rdx",
+            "push rsi",
+            "push rdi",
+            "push r8",
+            "push r9",
+            "push r10",
+            "call dispatch_syscall",
+            // Restore all registers
+            "pop r10",
+            "pop r9",
+            "pop r8",
+            "pop rdi",
+            "pop rsi",
+            "pop rdx",
+            "pop rcx",
+            "pop rax",
+            "iretq",
+        )
     }
-
-    x2apic::send_eoi();
 }
 
 #[naked]
