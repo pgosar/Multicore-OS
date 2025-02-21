@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use crate::{
+    constants::processes::MAX_FILES,
     debug,
     interrupts::gdt,
     memory::{
@@ -9,8 +10,9 @@ use crate::{
     },
     processes::{loader::load_elf, registers::Registers},
     serial_println,
+    syscalls::mmap::MmapCall,
 };
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
     arch::naked_asm,
     cell::UnsafeCell,
@@ -43,6 +45,8 @@ pub struct PCB {
     pub kernel_rip: u64,
     pub registers: Registers,
     pub pml4_frame: PhysFrame<Size4KiB>, // this process' page table
+    pub mmaps: Vec<MmapCall>,
+    pub fd_table: [u64; MAX_FILES],
 }
 
 pub struct UnsafePCB {
@@ -141,6 +145,8 @@ pub fn create_process(elf_bytes: &[u8]) -> u32 {
             rflags: 0x202,
         },
         pml4_frame: process_pml4_frame,
+        mmaps: Vec::new(),
+        fd_table: [0; MAX_FILES],
     }));
     let pid = unsafe { (*process.pcb.get()).pid };
     PROCESS_TABLE.write().insert(pid, Arc::clone(&process));

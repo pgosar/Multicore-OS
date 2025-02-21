@@ -1,5 +1,4 @@
 use crate::{
-    constants::syscalls::{SYSCALL_EXIT, SYSCALL_PRINT},
     events::{current_running_event_info, EventInfo},
     processes::process::{clear_process_frames, ProcessState, PROCESS_TABLE},
     serial_println,
@@ -7,25 +6,18 @@ use crate::{
 
 use crate::interrupts::x2apic;
 
-#[no_mangle]
-extern "C" fn dispatch_syscall() {
-    let syscall_num: u32;
-    unsafe {
-        core::arch::asm!("mov {0:r}, rax", out(reg) syscall_num);
-    }
-
-    match syscall_num {
-        SYSCALL_EXIT => sys_exit(),
-        SYSCALL_PRINT => serial_println!("Hello world!"),
-        _ => panic!("Unknown syscall: {}", syscall_num),
-    }
-}
-
-fn sys_exit() {
+pub fn sys_exit<T>(p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: u64) -> Option<T> {
     // TODO handle hierarchy (parent processes), resources, threads, etc.
     // TODO recursive page table walk to handle cleaning up process memory
     let cpuid: u32 = x2apic::current_core_id() as u32;
     let event: EventInfo = current_running_event_info(cpuid);
+
+    serial_println!("CODE: {}", p1);
+    serial_println!("CODE: {}", p2);
+    serial_println!("CODE: {}", p3);
+    serial_println!("CODE: {}", p4);
+    serial_println!("CODE: {}", p5);
+    serial_println!("CODE: {}", p6);
 
     if event.pid == 0 {
         panic!("Calling exit from outside of process");
@@ -59,4 +51,5 @@ fn sys_exit() {
             in(reg) preemption_info.1
         );
     }
+    None
 }

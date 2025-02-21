@@ -11,18 +11,27 @@ use x86_64::{
     instructions::interrupts,
     structures::{
         idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
-        paging::{OffsetPageTable, Page, PageTable},
+        paging::{OffsetPageTable, Page, PageTable, PageTableFlags},
     },
     VirtAddr,
 };
 
 use crate::{
-    constants::idt::{SYSCALL_HANDLER, TIMER_VECTOR, TLB_SHOOTDOWN_VECTOR},
+    constants::{
+        idt::{SYSCALL_HANDLER, TIMER_VECTOR, TLB_SHOOTDOWN_VECTOR},
+        memory::PAGE_SIZE,
+        syscalls::{SYSCALL_EXIT, SYSCALL_MMAP},
+    },
     events::{current_running_event_info, schedule_process, EventInfo},
     interrupts::x2apic::{self, current_core_id, TLB_SHOOTDOWN_ADDR},
-    memory::{paging::create_mapping, HHDM_OFFSET},
+    memory::{
+        frame_allocator::alloc_frame,
+        paging::{create_mapping, update_mapping},
+        HHDM_OFFSET, MAPPER,
+    },
     prelude::*,
     processes::process::{run_process_ring3, ProcessState, PROCESS_TABLE},
+    syscalls::{mmap::sys_mmap, syscall_handlers::sys_exit},
 };
 
 lazy_static! {
@@ -150,18 +159,83 @@ extern "x86-interrupt" fn page_fault_handler(
     // check for stack growth
     if stack_pointer - 64 <= faulting_address && faulting_address < (*HHDM_OFFSET).as_u64() {
         create_mapping(page, &mut mapper, None);
+        return;
     }
 
-    panic!("PAGE FAULT!");
+    // check if lazy loaded address from mmap
+    let cpuid: u32 = x2apic::current_core_id() as u32;
+    let event: EventInfo = current_running_event_info(cpuid);
+    let mut pid = event.pid;
+    pid = 1;
+    let process_table = PROCESS_TABLE.write();
+    let process = process_table
+        .get(&pid)
+        .expect("Could not get pcb from process table");
+    let pcb = unsafe { &mut *process.pcb.get() };
+    let mmaps = &mut (*pcb).mmaps;
+
+    for entry in mmaps.iter_mut() {
+        if entry.contains(faulting_address) {
+            serial_println!("Entry start: {}", entry.start);
+            let index = (faulting_address - entry.start) / PAGE_SIZE as u64;
+            if !entry.loaded[index as usize] && entry.fd == -1 {
+                entry.loaded[index as usize] = true;
+                let mut mapper = MAPPER.lock();
+                create_mapping(page, &mut *mapper, Some(PageTableFlags::PRESENT));
+                break;
+            } else if !entry.loaded[index as usize] && entry.fd != -1 {
+                let open_file = pcb.fd_table[entry.fd as usize];
+                entry.loaded[index as usize] = true;
+                let mut mapper = MAPPER.lock();
+                let frame = alloc_frame().expect("Could not allocate frame");
+                update_mapping(
+                    page,
+                    &mut *mapper,
+                    frame,
+                    Some(PageTableFlags::PRESENT | PageTableFlags::WRITABLE),
+                );
+                let pos = faulting_address - entry.start + entry.offset;
+                // figure out where in the file we are
+                // load file content
+                // write content to physmem
+            }
+        }
+    }
+    return;
 }
 
 #[no_mangle]
 extern "x86-interrupt" fn syscall_handler(_: InterruptStackFrame) {
+    let syscall_num: u32;
+    let p1: u64;
+    let p2: u64;
+    let p3: u64;
+    let p4: u64;
+    let p5: u64;
+    let p6: u64;
     unsafe {
-        // I believe we need to save registers
-        core::arch::asm!("push rax", "call dispatch_syscall", "pop rax",);
+        core::arch::asm!(
+            "mov {0:r}, rax",
+            "mov {1}, rdi",
+            "mov {2}, rsi",
+            "mov {3}, rdx",
+            "mov {4}, r10",
+            "mov {5}, r9",
+            "mov {6}, r8",
+            out(reg) syscall_num,
+            out(reg) p1,
+            out(reg) p2,
+            out(reg) p3,
+            out(reg) p4,
+            out(reg) p5,
+            out(reg) p6,
+        );
     }
-
+    match syscall_num {
+        SYSCALL_EXIT => sys_exit(p1, p2, p3, p4, p5, p6),
+        SYSCALL_MMAP => sys_mmap(p1, p2, p3, p4, p5 as i64, p6),
+        _ => panic!("Unknown syscall: {}", syscall_num),
+    };
     x2apic::send_eoi();
 }
 

@@ -10,12 +10,14 @@ use limine::{
 };
 
 use crate::{
+    constants::processes::SYSCALL_MMAP_MEMORY,
     debug, devices,
-    events::{register_event_runner, run_loop},
+    events::{register_event_runner, run_loop, schedule_process},
     interrupts::{self, idt},
     logging,
     memory::{self},
-    trace,
+    processes::process::{create_process, run_process_ring3, PROCESS_TABLE},
+    serial_println, trace,
 };
 
 extern crate alloc;
@@ -55,7 +57,25 @@ pub fn init() -> u32 {
 
     register_event_runner(bsp_id);
     idt::enable();
+    // let addr = sys_mmap(
+    //     0x1000,
+    //     0x5000,
+    //     ProtFlags::PROT_WRITE | ProtFlags::PROT_READ,
+    //     MmapFlags::MAP_ANONYMOUS,
+    //     -1,
+    //     0,
+    // );
+    let pid = create_process(SYSCALL_MMAP_MEMORY);
+    unsafe { schedule_process(bsp_id, run_process_ring3(pid), pid) };
 
+    let process_table = PROCESS_TABLE.read();
+    let process = process_table
+        .get(&pid)
+        .expect("can't find pcb in process table");
+    let pcb = process.pcb.get();
+    unsafe {
+        serial_println!("{:?}", *pcb);
+    }
     bsp_id
 }
 

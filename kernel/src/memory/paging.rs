@@ -15,6 +15,7 @@ use crate::{
         frame_allocator::{alloc_frame, dealloc_frame, FRAME_ALLOCATOR},
         tlb::tlb_shootdown,
     },
+    serial_println,
 };
 
 use super::HHDM_OFFSET;
@@ -95,9 +96,15 @@ pub fn create_mapping(
 /// * `page` - a Page that we want to map, must already be mapped
 /// * `mapper` - anything that implements a the Mapper trait
 /// * `frame` - the PhysFrame<Size4KiB> to map to
-pub fn update_mapping(page: Page, mapper: &mut impl Mapper<Size4KiB>, frame: PhysFrame<Size4KiB>) {
-    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
-
+pub fn update_mapping(
+    page: Page,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame: PhysFrame<Size4KiB>,
+    flags: Option<PageTableFlags>,
+) {
+    let mut flags = flags.unwrap_or(PageTableFlags::WRITABLE);
+    flags.set(PageTableFlags::PRESENT, true);
+    // update_permissions(page, mapper, flags);
     let (old_frame, _) = mapper
         .unmap(page)
         .expect("Unmap failed, frame likely was not mapped already");
@@ -187,6 +194,31 @@ pub fn map_kernel_frame(
     }
 
     temp_virt
+}
+
+/// Creates a mapping to a frame that page faults on first access
+///
+/// # Arguments
+/// * `page` - a virtual page
+/// * `mapper` - anything that implements the mapper trait
+/// * `flags` - the flags we want initially, will always not include PRESENT
+pub fn create_not_present_mapping(
+    page: Page,
+    mapper: &mut impl Mapper<Size4KiB>,
+    flags: Option<PageTableFlags>,
+) {
+    let frame = create_mapping(page, mapper, flags);
+    dealloc_frame(frame);
+
+    let mut flags = flags.unwrap_or(PageTableFlags::WRITABLE);
+
+    if flags.contains(PageTableFlags::PRESENT) {
+        flags.remove(PageTableFlags::PRESENT);
+    }
+
+    serial_println!("Flags: {:?}", flags.contains(PageTableFlags::PRESENT));
+
+    update_permissions(page, mapper, flags);
 }
 
 /// Update permissions for a specific page
@@ -397,7 +429,12 @@ mod tests {
             let new_frame = alloc_frame().expect("Could not find a new frame");
 
             // could say page already mapped, which would be really dumb
-            update_mapping(page, &mut *mapper, new_frame);
+            update_mapping(
+                page,
+                &mut *mapper,
+                new_frame,
+                Some(PageTableFlags::PRESENT | PageTableFlags::WRITABLE),
+            );
 
             unsafe {
                 page.start_address()
