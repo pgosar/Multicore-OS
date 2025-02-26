@@ -16,9 +16,9 @@ use crate::{
 /// Creates a new child process, Copy-on-write
 pub fn sys_fork() -> u64 {
     let child_pid = NEXT_PID.fetch_add(1, Ordering::SeqCst);
-    serial_println!("CHILD PID {}", child_pid);
     let cpuid: u32 = x2apic::current_core_id() as u32;
     let parent_pid = current_running_event_info(cpuid).pid;
+
     let process = {
         // clone the arc - the first reference is dropped out of this scope and we use the cloned one
         let process_table = PROCESS_TABLE.read();
@@ -31,10 +31,9 @@ pub fn sys_fork() -> u64 {
     let parent_pcb = process.pcb.get();
 
     let child_pcb = Arc::new(UnsafePCB::new(unsafe { (*parent_pcb).clone() }));
-    serial_println!("CHILD PCB {:?}", child_pcb.pcb.get());
     unsafe {
         (*child_pcb.pcb.get()).registers.rax = 0;
-        (*child_pcb.pcb.get()).registers.rip += 2;
+        (*child_pcb.pcb.get()).registers.rip = (*parent_pcb).registers.rip + 8;
         (*child_pcb.pcb.get()).state = ProcessState::Ready;
     }
 
@@ -50,6 +49,7 @@ pub fn sys_fork() -> u64 {
 
     let mut q = READY_QUEUE.lock();
     q.push_back(child_pid);
+    drop(q);
 
     return child_pid as u64;
 }
@@ -78,13 +78,13 @@ fn duplicate_page_table_recursive(
 
     // Obtain a pointer to the parent table.
     let parent_table_ptr =
-        (HHDM_OFFSET.as_u64() + parent_frame.start_address().as_u64()) as *const PageTable;
+        (HHDM_OFFSET.as_u64() + parent_frame.start_address().as_u64()) as *mut PageTable;
     
-    let parent_table = unsafe { &*parent_table_ptr };
+    let parent_table = unsafe { &mut *parent_table_ptr };
     let child_table = unsafe { &mut *child_table_ptr };
 
     // Iterate over all 512 entries.
-    for (i, parent_entry) in parent_table.iter().enumerate() {
+    for (i, parent_entry) in parent_table.iter_mut().enumerate() {
         if parent_entry.is_unused() {
             continue;
         }
@@ -113,8 +113,11 @@ fn duplicate_page_table_recursive(
                     flags.set(PageTableFlags::BIT_9, true);
                     flags.set(PageTableFlags::WRITABLE, false);
                 }
+                parent_entry.set_addr(parent_entry.addr(), flags);
+                
                 child_table[i].set_addr(parent_entry.addr(), flags);
             }
+            
         }
     }
 

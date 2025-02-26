@@ -67,8 +67,6 @@ pub fn sys_exit(code: i64) -> Option<u64> {
     let mut q = READY_QUEUE.lock();
     let next = q.pop_front().unwrap_or(0);
 
-    serial_println!("Next proc {}", next);
-    
     if next != 0 {
         unsafe { schedule_process(0, run_process_ring3(next), next) };
     }
