@@ -13,13 +13,13 @@ use crate::{
     serial_println,
     syscalls::mmap::MmapCall,
 };
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{collections::{vec_deque::VecDeque, BTreeMap}, sync::Arc, vec::Vec};
 use core::{
     arch::naked_asm,
     cell::UnsafeCell,
     sync::atomic::{AtomicU32, Ordering},
 };
-use spin::rwlock::RwLock;
+use spin::{rwlock::RwLock, Mutex};
 use x86_64::{
     instructions::interrupts,
     structures::paging::{FrameDeallocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
@@ -28,6 +28,8 @@ use x86_64::{
 // process counter must be thread-safe
 // PID 0 will ONLY be used for errors/PID not found
 pub static NEXT_PID: AtomicU32 = AtomicU32::new(1);
+
+pub static READY_QUEUE: Mutex<VecDeque<u32>> = Mutex::new(VecDeque::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessState {
@@ -295,6 +297,8 @@ use x86_64::registers::control::{Cr3, Cr3Flags};
 #[no_mangle]
 pub async unsafe fn run_process_ring3(pid: u32) {
     interrupts::disable();
+
+    serial_println!("Process {} is being scheduled", pid);
 
     let process = {
         let process_table = PROCESS_TABLE.read();

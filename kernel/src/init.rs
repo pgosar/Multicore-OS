@@ -13,7 +13,7 @@ use crate::{
     constants::processes::{FORK_SIMPLE, MMAP_ANON_SIMPLE}, debug, devices, events::{register_event_runner, run_loop, schedule_process}, interrupts::{self, idt, x2apic}, logging, memory::{self}, processes::{
         self,
         process::{create_process, print_process_table, run_process_ring3, PROCESS_TABLE},
-    }, serial_println, syscalls::fork::verify_page_table_walk, trace
+    }, serial_println, trace
 };
 
 extern crate alloc;
@@ -64,11 +64,10 @@ pub fn init() -> u32 {
     //     0,
     // );
     let parent_pid = create_process(FORK_SIMPLE);
-        let cpuid: u32 = x2apic::current_core_id() as u32;
-        schedule_process(cpuid, unsafe { run_process_ring3(parent_pid) }, parent_pid);
-        let child_pid = parent_pid + 1;
+    let cpuid: u32 = x2apic::current_core_id() as u32;
+    schedule_process(cpuid, unsafe { run_process_ring3(parent_pid) }, parent_pid);
 
-        serial_println!("PARENT PID {}", parent_pid);
+
 
         // since no other processes are running or being created we assume that
         // the child pid is one more than the child pid

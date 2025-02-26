@@ -9,4 +9,4 @@ pub const FORK_SIMPLE: &[u8] = include_bytes!("../processes/test_binaries/fork_s
 
 pub const STACK_START: u64 = 0x7000_0000_0000;
 pub const STACK_SIZE: usize = 2 * 4096; // 2 pages for the stack
-pub const MAX_FILES: usize = 1024;
+pub const MAX_FILES: usize = 4;

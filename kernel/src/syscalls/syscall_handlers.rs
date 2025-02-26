@@ -1,8 +1,8 @@
 use core::ffi::CStr;
 
 use crate::{
-    events::{current_running_event_info, EventInfo},
-    processes::process::{clear_process_frames, ProcessState, PROCESS_TABLE},
+    events::{current_running_event_info, schedule_process, EventInfo},
+    processes::process::{clear_process_frames, run_process_ring3, ProcessState, PROCESS_TABLE, READY_QUEUE},
     serial_println,
 };
 
@@ -47,7 +47,7 @@ pub fn sys_exit(code: i64) -> Option<u64> {
         let pcb = process.pcb.get();
 
         (*pcb).state = ProcessState::Terminated;
-        clear_process_frames(&mut *pcb);
+        // clear_process_frames(&mut *pcb);
         process_table.remove(&event.pid);
         ((*pcb).kernel_rsp, (*pcb).kernel_rip)
     };
@@ -58,14 +58,29 @@ pub fn sys_exit(code: i64) -> Option<u64> {
             "mov rsp, {0}",
             "push {1}",
             "stc",          // Use carry flag as sentinel to run_process that we're exiting
-            "ret",
+            // "ret",
             in(reg) preemption_info.0,
             in(reg) preemption_info.1
         );
     }
+
+    let mut q = READY_QUEUE.lock();
+    let next = q.pop_front().unwrap_or(0);
+
+    serial_println!("Next proc {}", next);
+    
+    if next != 0 {
+        unsafe { schedule_process(0, run_process_ring3(next), next) };
+    }
+
     if code == -1 {
         panic!("Bad error code!");
     }
+
+    unsafe {
+        core::arch::asm!("ret");
+    }
+
     Some(code as u64)
 }
 
@@ -74,7 +89,9 @@ pub fn sys_print(/*buffer: *const u8*/) -> Option<u64> {
     // let c_str = unsafe { CStr::from_ptr(buffer as *const i8) };
     // let str_slice = c_str.to_str().expect("Invalid UTF-8 string");
     // serial_println!("Buffer: {}", str_slice);
-    serial_println!("Hello world");
+    let cpuid: u32 = x2apic::current_core_id() as u32;
+    let event: EventInfo = current_running_event_info(cpuid);
+    serial_println!("Hello world, called from PID {}", event.pid);
 
     Some(3)
 }

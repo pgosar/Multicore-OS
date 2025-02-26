@@ -291,12 +291,12 @@ fn syscall_handler(rsp: u64) {
     }
 
     // temporarily, just print the parameter registers
-    serial_println!("Parameter 1: {}", p1);
-    serial_println!("Parameter 2: {}", p2);
-    serial_println!("Parameter 3: {}", p3);
-    serial_println!("Parameter 4: {}", p4);
-    serial_println!("Parameter 5: {}", p5 as i64);
-    serial_println!("Parameter 6: {}", p6);
+    // serial_println!("Parameter 1: {}", p1);
+    // serial_println!("Parameter 2: {}", p2);
+    // serial_println!("Parameter 3: {}", p3);
+    // serial_println!("Parameter 4: {}", p4);
+    // serial_println!("Parameter 5: {}", p5 as i64);
+    // serial_println!("Parameter 6: {}", p6);
 
     x2apic::send_eoi();
 
@@ -429,7 +429,7 @@ extern "C" fn timer_handler(rsp: u64) {
         (*pcb).registers.rip = *stack_ptr.add(15);
         (*pcb).registers.rflags = *stack_ptr.add(17);
 
-        (*pcb).state = ProcessState::Blocked;
+        (*pcb).state = ProcessState::Ready;
 
         ((*pcb).kernel_rsp, (*pcb).kernel_rip)
     };

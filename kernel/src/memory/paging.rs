@@ -424,7 +424,9 @@ mod tests {
 
         let read_value = unsafe { page.start_address().as_ptr::<u64>().read_volatile() };
 
-        assert_eq!(read_value, TEST_VALUE)
+        assert_eq!(read_value, TEST_VALUE);
+
+        remove_mapped_frame(page, &mut *mapper);
     }
 
     // Test that contiguous mappings work correctly. Allocates 8 pages in a row.
