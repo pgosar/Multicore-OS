@@ -5,6 +5,7 @@ pub const PRINT_PRINT_EXIT: &[u8] = include_bytes!("../processes/test_binaries/p
 pub const MMAP_ANON_SIMPLE: &[u8] = include_bytes!("../processes/test_binaries/mmap_anon_simple");
 pub const MMAP_ANON_SIMPLE_TEST: &[u8] =
     include_bytes!("../processes/test_binaries/mmap_anon_simple_test");
+pub const FORK_SIMPLE: &[u8] = include_bytes!("../processes/test_binaries/fork_simple");
 
 pub const STACK_START: u64 = 0x7000_0000_0000;
 pub const STACK_SIZE: usize = 2 * 4096; // 2 pages for the stack

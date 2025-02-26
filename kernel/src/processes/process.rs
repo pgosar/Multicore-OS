@@ -38,7 +38,7 @@ pub enum ProcessState {
     Terminated,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PCB {
     pub pid: u32,
     pub state: ProcessState,
@@ -56,7 +56,7 @@ pub struct UnsafePCB {
 }
 
 impl UnsafePCB {
-    fn init(pcb: PCB) -> Self {
+    pub fn new(pcb: PCB) -> Self {
         UnsafePCB {
             pcb: UnsafeCell::new(pcb),
         }
@@ -125,7 +125,7 @@ pub fn create_placeholder_process() -> u32 {
     // Build a new process address space
     let pid = 0;
     let process_pml4_frame = unsafe { create_process_page_table() };
-    let process = Arc::new(UnsafePCB::init(PCB {
+    let process = Arc::new(UnsafePCB::new(PCB {
         pid,
         state: ProcessState::New,
         kernel_rsp: 0,
@@ -171,7 +171,7 @@ pub fn create_process(elf_bytes: &[u8]) -> u32 {
     };
     let (stack_top, entry_point) = load_elf(elf_bytes, &mut mapper, &mut KERNEL_MAPPER.lock());
 
-    let process = Arc::new(UnsafePCB::init(PCB {
+    let process = Arc::new(UnsafePCB::new(PCB {
         pid,
         state: ProcessState::New,
         kernel_rsp: 0,

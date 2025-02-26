@@ -19,6 +19,8 @@ use crate::{
     },
 };
 
+use crate::serial_println;
+
 use super::HHDM_OFFSET;
 
 static mut NEXT_EPH_OFFSET: u64 = 0;
@@ -345,7 +347,7 @@ mod tests {
     #[test_case]
     fn test_remove_mapped_frame() {
         let mut mapper = KERNEL_MAPPER.lock();
-        let page: Page = Page::containing_address(VirtAddr::new(0x500000000));
+        let page: Page = Page::containing_address(VirtAddr::new(0x400000000));
         let _ = create_mapping(page, &mut *mapper, None);
 
         remove_mapped_frame(page, &mut *mapper);
@@ -364,7 +366,7 @@ mod tests {
         let mut mapper = KERNEL_MAPPER.lock();
 
         // random test virtual page
-        let page: Page = Page::containing_address(VirtAddr::new(0x500000000));
+        let page: Page = Page::containing_address(VirtAddr::new(0x400001000));
         let frame: PhysFrame = create_mapping(page, &mut *mapper, None);
 
         let translate_frame = mapper.translate_page(page).expect("Translation failed");
@@ -379,7 +381,7 @@ mod tests {
     fn test_update_permissions() {
         let mut mapper = KERNEL_MAPPER.lock();
 
-        let page: Page = Page::containing_address(VirtAddr::new(0x500000000));
+        let page: Page = Page::containing_address(VirtAddr::new(0x400002000));
         let _ = create_mapping(page, &mut *mapper, None);
 
         let flags = PageTableFlags::PRESENT;
@@ -400,7 +402,7 @@ mod tests {
 
         const TEST_VALUE: u64 = 0x42;
 
-        let page = Page::containing_address(VirtAddr::new(0x500000000));
+        let page = Page::containing_address(VirtAddr::new(0x400003000));
         let init_frame = create_mapping(
             page,
             &mut *mapper,
@@ -431,7 +433,7 @@ mod tests {
         let mut mapper = KERNEL_MAPPER.lock();
 
         // Define a contiguous region spanning 8 pages.
-        let start_page: Page = Page::containing_address(VirtAddr::new(0x500000000));
+        let start_page: Page = Page::containing_address(VirtAddr::new(0x400004000));
         let num_pages = 8;
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 
@@ -468,7 +470,7 @@ mod tests {
         const PID: u32 = 0;
 
         // create mapping and set value on current core to cache page
-        let page: Page = Page::containing_address(VirtAddr::new(0x500000000));
+        let page: Page = Page::containing_address(VirtAddr::new(0x400010000));
 
         {
             let mut mapper = KERNEL_MAPPER.lock();

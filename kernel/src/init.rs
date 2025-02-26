@@ -10,10 +10,10 @@ use limine::{
 };
 
 use crate::{
-    constants::processes::MMAP_ANON_SIMPLE,
+    constants::processes::{FORK_SIMPLE, MMAP_ANON_SIMPLE},
     debug, devices,
     events::{register_event_runner, run_loop, schedule_process},
-    interrupts::{self, idt},
+    interrupts::{self, idt, x2apic},
     logging,
     memory::{self},
     processes::{
@@ -70,17 +70,10 @@ pub fn init() -> u32 {
     //     -1,
     //     0,
     // );
-    let pid = create_process(MMAP_ANON_SIMPLE);
-    unsafe { schedule_process(bsp_id, run_process_ring3(pid), pid) };
-
-    let process_table = PROCESS_TABLE.read();
-    let process = process_table
-        .get(&pid)
-        .expect("can't find pcb in process table");
-    let pcb = process.pcb.get();
-    unsafe {
-        serial_println!("{:?}", *pcb);
-    }
+    let parent_pid = create_process(FORK_SIMPLE);
+    let cpuid: u32 = x2apic::current_core_id() as u32;
+    schedule_process(cpuid, unsafe { run_process_ring3(parent_pid) }, parent_pid);
+    let child_pid = parent_pid + 1;
     bsp_id
 }
 
