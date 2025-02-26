@@ -1,3 +1,5 @@
+use crate::trivial_lib_assertion;
+
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
 /// See section 6.2.2 of xHCI specs
@@ -139,7 +141,7 @@ impl slot_contex {
 
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
-/// See section 6.2.3 of the xHCI specs
+/// See section 6.2.3 of the xHCI specs.
 /// This structure should only be 32 bytes if Context Size field in the
 /// HCCPARAMS1 register is '0', otherwise it is 64 bytes with bytes 32
 /// to 64 reserved for the xHCI
@@ -301,5 +303,55 @@ impl endpoint_context {
         let esitlo: u32 = (self.offset_4 >> 16) & 0xFFFF;
         let esithi: u32 = (self.offset_0 >> 24) & 0xFF;
         (esithi << 16) | esitlo
+    }
+}
+
+#[repr(C, packed)]
+#[derive(Debug, Clone)]
+/// See section 6.2.4.1 of the xHCI specs.
+/// The Context Size field of the HCCPARAMS1 register does not apply to this
+/// structure, it is always 16 bytes in size.
+struct stream_context {
+    offset_0: u32,
+    offset_1: u32,
+    offset_2: u32,
+    offset_3: u32
+}
+
+impl stream_context {
+    /// Retrieves the Dequeue Cycle State field from the stream context.
+    /// This field is only 1 bit wide and identifies the value of the xHC Consumer
+    /// Cycle State (CCS) flag for the TRB.
+    fn get_dcs(&self) -> u32 {
+        self.offset_0 & 0x1
+    }
+
+    /// Retrieves the Stream Context Type field from the stream context.
+    /// This field is only 3 bits wide and identifies certain values.
+    /// See table 6-13 in section 6.2.4.1 of the xHCI specs for more info.
+    fn get_sct(&self) -> u32 {
+        (self.offset_0 >> 1) & 0x7
+    }
+
+    /// Retrieves the TR Dequeue Pointer field from the stream context.
+    fn get_tr_deq_ptr(&self) -> u64 {
+        let trdeqlo: u64 = (self.offset_0 & !0xF).into();
+        let trdeqhi: u64 = (self.offset_1).into();
+        (trdeqhi << 32) | trdeqlo
+    }
+
+    /// Sets the TR Dequeue Pointer of the stream context to address.
+    fn set_tr_deq_ptr(&mut self, address: u64) {
+        let trdeqlo: u32 = (address & 0xFFFFFFF0) as u32;
+        let trdeqhi: u32 = ((address >> 32) & 0xFFFFFFFF) as u32;
+        self.offset_0 = (self.offset_0 & 0xF) | trdeqlo;
+        self.offset_1 = trdeqhi;
+    }
+
+    /// Retrieves the Stopped EDTLA field from the stream context.
+    /// This field is 24 bits wide and identifies the value of the EDTLA when
+    /// the stream is in the stopped state.
+    fn get_stopped_edtla(&self) -> u32 {
+        self.offset_2 & 0xFFFFFF
     }
 }
