@@ -70,10 +70,11 @@ pub fn sys_exit(code: i64) -> Option<u64> {
 }
 
 // Not a real system call, but useful for testing
-pub fn sys_print(buffer: *const u8) -> Option<u64> {
-    let c_str = unsafe { CStr::from_ptr(buffer as *const i8) };
-    let str_slice = c_str.to_str().expect("Invalid UTF-8 string");
-    serial_println!("Buffer: {}", str_slice);
+pub fn sys_print(/*buffer: *const u8*/) -> Option<u64> {
+    // let c_str = unsafe { CStr::from_ptr(buffer as *const i8) };
+    // let str_slice = c_str.to_str().expect("Invalid UTF-8 string");
+    // serial_println!("Buffer: {}", str_slice);
+    serial_println!("Hello world");
 
     Some(3)
 }

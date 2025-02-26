@@ -318,7 +318,7 @@ fn syscall_handler(rsp: u64) {
             )
         }
     } else if syscall_num == SYSCALL_PRINT {
-        let val = sys_print(p1 as *const u8).unwrap();
+        let val = sys_print(/*p1 as *const u8*/).unwrap();
         unsafe {
             core::arch::asm!(
                 "mov rax, {0}",
