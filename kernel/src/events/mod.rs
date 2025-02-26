@@ -114,7 +114,7 @@ pub fn schedule_blocked_process(
         let mut runner = runners.get(&cpuid).expect("No runner found").write();
 
         unsafe {
-            runner.schedule(run_process_ring3(pid), NUM_EVENT_PRIORITIES - 1, pid);
+            runner.schedule_blocked(run_process_ring3(pid), NUM_EVENT_PRIORITIES - 1, pid);
         }
     });
 

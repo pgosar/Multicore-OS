@@ -59,6 +59,7 @@ impl EventRunner {
                         event
                             .scheduled_timestamp
                             .swap(self.event_clock, Ordering::Relaxed);
+
                         if !self.blocked_events.read().contains(&event.eid.0) {
                             let priority = event.priority.load(Ordering::Relaxed);
                             Self::enqueue(&self.event_queues[priority], event.clone());
@@ -70,6 +71,7 @@ impl EventRunner {
                 }
 
                 self.current_event = None;
+                interrupts::enable();
             }
 
             // TODO do a lil work-stealing
@@ -110,6 +112,31 @@ impl EventRunner {
         }
     }
 
+    // Notifies runner of a blocked event
+    // Event MUST be awoken externally with .awake()
+    pub fn schedule_blocked(
+        &mut self,
+        future: impl Future<Output = ()> + 'static + Send,
+        priority_level: usize,
+        pid: u32,
+    ) {
+        if priority_level >= NUM_EVENT_PRIORITIES {
+            panic!("Invalid event priority: {}", priority_level);
+        } else {
+            let event = Arc::new(Event::init(
+                future,
+                self.event_queues[priority_level].clone(),
+                self.blocked_events.clone(),
+                priority_level,
+                pid,
+                self.event_clock,
+            ));
+
+            self.pending_events.write().insert(event.eid.0);
+            self.blocked_events.write().insert(event.eid.0);
+        }
+    }
+
     pub fn current_running_event(&self) -> Option<&Arc<Event>> {
         self.current_event.as_ref()
     }
@@ -125,6 +152,7 @@ impl EventRunner {
             let future = sleeper.unwrap();
             if future.target_timestamp <= self.system_clock {
                 future.awake();
+                self.blocked_events.write().remove(&future.get_id());
                 self.sleeping_events.pop();
             }
         }

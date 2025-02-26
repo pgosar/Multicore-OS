@@ -39,7 +39,6 @@ pub fn sys_exit() {
         core::arch::asm!(
             "mov rsp, {0}",
             "push {1}",
-            "stc",          // Use carry flag as sentinel to run_process that we're exiting
             "ret",
             in(reg) preemption_info.0,
             in(reg) preemption_info.1
@@ -50,5 +49,4 @@ pub fn sys_exit() {
 pub fn sys_nanosleep(nanos: u64, rsp: u64) {
     sleep_process(rsp, nanos);
     x2apic::send_eoi();
-    return;
 }
